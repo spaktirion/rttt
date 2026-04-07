@@ -886,32 +886,65 @@ class RemoteController {
   send(d) { if (this.conn?.open) this.conn.send(d); }
 
   bindEvents() {
+    // NEW: MQTT Discovery for GitHub/Local Network
     document.getElementById('btnAutoScan').addEventListener('click', async () => {
-      if (!('BroadcastChannel' in window)) { toast('Auto-discover not supported here', 'warning'); return; }
-      document.getElementById('scanIndicator').classList.remove('hidden');
-      document.getElementById('btnAutoScan').classList.add('opacity-50');
-      let found = false;
-      const ch = new BroadcastChannel('aether-local-discovery');
-      ch.addEventListener('message', e => {
-        if (e.data.type === 'DISCOVERY' && !found) {
-          found = true;
-          document.getElementById('remoteServerInput').value = e.data.name;
-          this.connect(); ch.close();
-        }
-      });
-      setTimeout(() => {
-        ch.close();
-        document.getElementById('scanIndicator').classList.add('hidden');
-        document.getElementById('btnAutoScan').classList.remove('opacity-50');
-        if (!found) toast('No local server found. Enter name manually.', 'warning');
-      }, 4000);
+      const scanBtn = document.getElementById('btnAutoScan');
+      const indicator = document.getElementById('scanIndicator');
+      
+      scanBtn.classList.add('opacity-50');
+      indicator.classList.remove('hidden');
+      toast("Scanning Wi-Fi Lobby...", "info");
+
+      try {
+        // 1. Find Public IP - Devices on same Wi-Fi share this IP
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        const homeId = data.ip.replace(/\./g, '_');
+        
+        // 2. Connect to the MQTT broker
+        const mqttClient = mqtt.connect('wss://test.mosquitto.org:8081');
+        const topic = `aether_pro_discovery/${homeId}`;
+
+        mqttClient.on('connect', () => mqttClient.subscribe(topic));
+
+        let found = false;
+        const timeout = setTimeout(() => {
+          if (!found) {
+            mqttClient.end();
+            indicator.classList.add('hidden');
+            scanBtn.classList.remove('opacity-50');
+            toast("No servers found on this Wi-Fi", "warning");
+          }
+        }, 5000);
+
+        mqttClient.on('message', (t, msg) => {
+          if (found) return;
+          const serverData = JSON.parse(msg.toString());
+          if (serverData.name) {
+            found = true;
+            clearTimeout(timeout);
+            mqttClient.end();
+            
+            // Auto-fill the name and connect
+            document.getElementById('remoteServerInput').value = serverData.name;
+            indicator.classList.add('hidden');
+            scanBtn.classList.remove('opacity-50');
+            toast(`Found: ${serverData.name}`, "success");
+            this.connect(); 
+          }
+        });
+      } catch (err) {
+        indicator.classList.add('hidden');
+        scanBtn.classList.remove('opacity-50');
+        toast("Discovery service unavailable", "error");
+      }
     });
 
+    // Standard manual events
     document.getElementById('btnManualConnect').addEventListener('click', () => this.connect());
     document.getElementById('remoteServerInput').addEventListener('keydown', e => { if (e.key === 'Enter') this.connect(); });
     document.getElementById('btnDisconnect').addEventListener('click', () => { this.conn?.close(); this._onDisconnect(); });
   }
-
   destroy() { this.conn?.close(); this.peer?.destroy(); }
 }
 
