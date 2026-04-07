@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" onerror="console.warn('PeerJS CDN failed, using local fallback')"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
   :root {
@@ -967,17 +968,30 @@ window.fav = url => {
 document.addEventListener('DOMContentLoaded', () => {
   app = new AetherApp();
   fetchSerbianStations();
-  if ('BroadcastChannel' in window) {
-    setInterval(() => {
-      if (app.server.state.serverName) {
-        const ch = new BroadcastChannel('aether-local-discovery');
-        ch.postMessage({ type: 'DISCOVERY', name: app.server.state.serverName });
-        ch.close();
-      }
-    }, 2000);
-  }
-});
 
+  // Connect to the public walkie-talkie server (MQTT)
+  const mqttClient = mqtt.connect('wss://test.mosquitto.org:8081');
+  
+  // Every 4 seconds, announce this server to the internet lobby
+  setInterval(async () => {
+    // Only announce if a server name is actually set and running
+    if (app.server && app.server.state.serverName && mqttClient.connected) {
+      try {
+        // 1. Ask what the house's Public IP is
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        const homeId = data.ip.replace(/\./g, '_'); // Formats it like 82_117_20_5
+        
+        // 2. Broadcast the server name into that specific IP's room
+        mqttClient.publish(`aether_pro_discovery/${homeId}`, JSON.stringify({
+          name: app.server.state.serverName
+        }));
+      } catch (err) {
+        // Silently ignore if offline
+      }
+    }
+  }, 4000); 
+});
 window.addEventListener('beforeunload', () => app?.destroy());
 </script>
 </body>
