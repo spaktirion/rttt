@@ -998,31 +998,44 @@ window.fav = url => {
   app.home.renderStations(); app.home.renderSearch();
 };
 
+// ════════════════ FINAL BOOTSTRAP & BACKGROUND FIX ════════════════
 document.addEventListener('DOMContentLoaded', () => {
   app = new AetherApp();
   fetchSerbianStations();
 
-  // Initialize MQTT for discovery
+  // 1. BACKGROUND PLAY FIX: Setup Media Session for Android Lock Screen
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.setActionHandler('play', () => app.home.playStation());
+    navigator.mediaSession.setActionHandler('pause', () => app.home.pauseStation());
+  }
+
+  // 2. DISCOVERY FIX: Initialize MQTT Lobby
   const mqttClient = mqtt.connect('wss://test.mosquitto.org:8081');
   
   setInterval(async () => {
-    // Only broadcast if this device has a Server Name and is started
+    // Only broadcast if the server is active
     if (app.server && app.server.state.serverName && mqttClient.connected) {
       try {
-        // This is the "Discovery Service" part
-        const response = await fetch('https://api.ipify.org?format=json');
-        const data = await response.json();
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
         const homeId = data.ip.replace(/\./g, '_');
         
         mqttClient.publish(`aether_pro_discovery/${homeId}`, JSON.stringify({
           name: app.server.state.serverName
         }));
-      } catch (e) { 
-        console.error("Discovery broadcast failed", e);
-      }
+      } catch (e) { /* IP fetch failed */ }
     }
   }, 4000);
 });
+
+// Keeps the browser from killing the process when screen goes off
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && app.home.state.playing) {
+    const silence = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+    silence.play().catch(()=>{});
+  }
+});
+	
 window.addEventListener('beforeunload', () => app?.destroy());
 </script>
 </body>
