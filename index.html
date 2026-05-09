@@ -370,6 +370,19 @@ const CONFIG = {
   }
 };
 
+// FIX: Explicit ICE/STUN servers for WebRTC — required for GitHub Pages cross-device connections
+const PEER_CONFIG = {
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+    ]
+  }
+};
+
 (() => {
   const keep = new Set(Object.values(CONFIG.STORAGE_KEYS));
   for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -572,7 +585,7 @@ class HomePlayer {
     if (this.isRemoteActive()) {
       // When remote, we don't play locally — but we still update our display
       // The server will broadcast back the status
-	  app.remote.send({ type: 'PLAY_STATION', url: url, name: name });
+          app.remote.send({ type: 'PLAY_STATION', url: url, name: name });
       return;
     }
     clearInterval(this.rdsInt);
@@ -581,7 +594,7 @@ class HomePlayer {
     this.audio.src = url;
     try { await this.audio.play(); this.updateStatus('Streaming • Live', 'success'); this._startRDS(); }
     catch { this.updateStatus('Blocked — tap play', 'warning'); }
-	this.updateMediaSession(name);
+        this.updateMediaSession(name);
     this.render(); this.renderStations(); app?.server?.broadcastStatus();
   }
 
@@ -630,7 +643,7 @@ class HomePlayer {
       const result = await fetchIcecast(u) || await fetchShoutcast(u);
       if (result && result.length > 1) song = result;
     } catch {}
-	this.updateMediaSession(s.name, song);
+        this.updateMediaSession(s.name, song);
     // Update current track display
     if (song && song !== 'LIVE BROADCAST') {
       const mainTrack = document.getElementById('mainTrack');
@@ -775,7 +788,7 @@ class ServerManager {
     document.getElementById('activeServerName').textContent = name;
     document.getElementById('serverStatusLine').textContent = 'Starting…';
     if (this.peer) { this.peer.destroy(); this.peer = null; }
-    this.peer = new Peer('AETHER-ULTRA-' + name);
+    this.peer = new Peer('AETHER-ULTRA-' + name, PEER_CONFIG);
     this.peer.on('open', () => {
       document.getElementById('serverStatusLine').textContent = 'Live • ' + name;
       toast('Server "' + name + '" is ready', 'success');
@@ -834,11 +847,11 @@ class ServerManager {
         home.togglePlay();
       }
     }
-	
-	if (cmd.type === 'PLAY_STATION') {
+        
+        if (cmd.type === 'PLAY_STATION') {
       home.playStation(cmd.url, cmd.name);
     }
-	
+        
     if (cmd.type === 'NEXT')   home.navigate(1);
     if (cmd.type === 'PREV')   home.navigate(-1);
     if (cmd.type === 'VOLUME') {
@@ -901,9 +914,9 @@ class RemoteController {
     this.loadHistory();
 
     if (this.peer) { this.peer.destroy(); this.peer = null; this.conn = null; }
-    this.peer = new Peer();
+    this.peer = new Peer(PEER_CONFIG);
     this.peer.on('open', () => {
-      const c = this.peer.connect('AETHER-ULTRA-' + name);
+      const c = this.peer.connect('AETHER-ULTRA-' + name, { reliable: true });
       this.conn = c;
       c.on('open', () => {
         this.state.connected = true;
@@ -1089,7 +1102,7 @@ document.addEventListener('visibilitychange', () => {
     silence.play().catch(()=>{});
   }
 });
-	
+        
 window.addEventListener('beforeunload', () => app?.destroy());
 </script>
 </body>
