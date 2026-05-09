@@ -776,18 +776,34 @@ class ServerManager {
     document.getElementById('serverStatusLine').textContent = 'Starting…';
     if (this.mqtt) { this.mqtt.end(); this.mqtt = null; }
     const ctrlTopic = 'aether_pro_ctrl_' + name;
-    this.mqtt = mqtt.connect('wss://test.mosquitto.org:8081');
+    const statusTopic = 'aether_pro_status_' + name;
+    this.mqtt = mqtt.connect('wss://broker.emqx.io:8084/mqtt', { clientId: 'server_' + name + '_' + Math.random().toString(36).slice(2), clean: true, connectTimeout: 8000, reconnectPeriod: 5000 });
+    const connectTimeout = setTimeout(() => {
+      if (!this.mqtt?.connected) {
+        toast('Broker unreachable — check your internet', 'error');
+        document.getElementById('serverStatusLine').textContent = 'Connection failed — retrying…';
+      }
+    }, 10000);
     this.mqtt.on('connect', () => {
+      clearTimeout(connectTimeout);
       this.mqtt.subscribe(ctrlTopic);
       document.getElementById('serverStatusLine').textContent = 'Live • ' + name;
       toast('Server "' + name + '" is ready', 'success');
+      this.broadcastStatus();
     });
     this.mqtt.on('message', (t, msg) => {
       try { this.execCommand(JSON.parse(msg.toString())); } catch {}
     });
-    this.mqtt.on('error', () => {
-      toast('Server connection error', 'error');
-      document.getElementById('serverStatusLine').textContent = 'Error';
+    this.mqtt.on('error', (e) => {
+      console.warn('MQTT error:', e?.message || e);
+    });
+    this.mqtt.on('close', () => {
+      if (this.state.serverName) {
+        document.getElementById('serverStatusLine').textContent = 'Disconnected — retrying…';
+      }
+    });
+    this.mqtt.on('reconnect', () => {
+      document.getElementById('serverStatusLine').textContent = 'Reconnecting…';
     });
   }
 
@@ -899,7 +915,9 @@ class RemoteController {
     if (this.mqtt) { this.mqtt.end(); this.mqtt = null; }
     const ctrlTopic = 'aether_pro_ctrl_' + name;
     const statusTopic = 'aether_pro_status_' + name;
-    this.mqtt = mqtt.connect('wss://test.mosquitto.org:8081');
+    document.getElementById('remoteStatusText').textContent = 'Connecting…';
+    document.getElementById('remoteStatusDot').className = 'connection-dot offline';
+    this.mqtt = mqtt.connect('wss://broker.emqx.io:8084/mqtt', { clientId: 'remote_' + name + '_' + Math.random().toString(36).slice(2), clean: true, connectTimeout: 8000, reconnectPeriod: 5000 });
     this.mqtt.on('connect', () => {
       this.mqtt.subscribe(statusTopic);
       this.mqtt.publish(ctrlTopic, JSON.stringify({ type: 'HELLO' }));
@@ -914,7 +932,12 @@ class RemoteController {
     this.mqtt.on('message', (t, msg) => {
       try { this.handleData(JSON.parse(msg.toString())); } catch {}
     });
-    this.mqtt.on('error', () => toast('Could not reach "' + name + '"', 'error'));
+    this.mqtt.on('error', (e) => {
+      console.warn('MQTT error:', e?.message || e);
+    });
+    this.mqtt.on('close', () => {
+      if (this.state.serverName) this._onDisconnect();
+    });
   }
 
   _onDisconnect() {
@@ -956,7 +979,7 @@ class RemoteController {
         const homeId = data.ip.replace(/\./g, '_');
         
         // 2. Connect to the MQTT broker
-        const mqttClient = mqtt.connect('wss://test.mosquitto.org:8081');
+        const mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', { clientId: 'scan_' + Math.random().toString(36).slice(2), clean: true, connectTimeout: 5000 });
         const topic = `aether_pro_discovery/${homeId}`;
 
         mqttClient.on('connect', () => mqttClient.subscribe(topic));
@@ -1064,7 +1087,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 2. DISCOVERY FIX: Initialize MQTT Lobby
-  const mqttClient = mqtt.connect('wss://test.mosquitto.org:8081');
+  const mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', { clientId: 'lobby_' + Math.random().toString(36).slice(2), clean: true, connectTimeout: 8000, reconnectPeriod: 10000 });
   
   setInterval(async () => {
     // Only broadcast if the server is active
