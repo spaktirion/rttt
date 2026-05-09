@@ -100,9 +100,9 @@
   .search-input::placeholder { color: #4b5563; }
 </style>
 </head>
-<body class="h-screen flex items-center justify-center bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-[#030305] to-[#030305] overflow-hidden selection:bg-indigo-500/30">
+<body class="h-dvh flex sm:items-center sm:justify-center bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-[#030305] to-[#030305] overflow-hidden selection:bg-indigo-500/30">
 
-<div id="app" class="w-full max-w-[400px] h-[94vh] max-h-[820px] glass-strong rounded-[32px] flex flex-col overflow-hidden relative shadow-2xl border border-white/10 ring-1 ring-black/60">
+<div id="app" class="w-full sm:max-w-[400px] h-dvh sm:h-[94vh] sm:max-h-[820px] glass-strong sm:rounded-[32px] flex flex-col overflow-hidden relative shadow-2xl border-0 sm:border sm:border-white/10 sm:ring-1 ring-black/60">
   <audio id="audioPlayer" crossorigin="anonymous" preload="metadata"></audio>
   <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 pointer-events-none"></div>
   <div class="absolute -top-32 -right-32 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -148,41 +148,65 @@
 
     <!-- ═══════ HOME VIEW ═══════ -->
     <section id="viewHome" class="view-container h-full flex flex-col">
-      <div class="flex-shrink-0 flex items-center justify-center relative mb-2 mt-2">
-        <div class="absolute inset-0 flex items-center justify-center opacity-15 pointer-events-none">
-          <div class="w-32 h-32 rounded-full border border-indigo-500/30 animate-ping" style="animation-duration: 5s;"></div>
+
+      <!-- ── MINI PLAYER (shown when scrolled) ── -->
+      <div id="miniPlayer" class="hidden flex-shrink-0 flex items-center gap-3 px-4 py-2.5 bg-black/30 border-b border-white/5 cursor-pointer" onclick="document.getElementById('stationScrollArea').scrollTop=0">
+        <div class="flex items-end justify-center gap-0.5 h-5 eq-container w-8 shrink-0">
+          <div class="eq-bar eq-1 w-1 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[12%]"></div>
+          <div class="eq-bar eq-2 w-1 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[28%]"></div>
+          <div class="eq-bar eq-3 w-1 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[18%]"></div>
+          <div class="eq-bar eq-4 w-1 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[28%]"></div>
+          <div class="eq-bar eq-5 w-1 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[12%]"></div>
         </div>
-        <div class="relative z-10 flex items-end justify-center gap-2 h-16 eq-container">
-          <div class="eq-bar eq-1 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[12%] shadow-lg"></div>
-          <div class="eq-bar eq-2 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[28%] shadow-lg"></div>
-          <div class="eq-bar eq-3 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[18%] shadow-lg"></div>
-          <div class="eq-bar eq-4 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[28%] shadow-lg"></div>
-          <div class="eq-bar eq-5 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[12%] shadow-lg"></div>
+        <div class="flex-1 min-w-0">
+          <div id="miniStationName" class="text-[11px] font-semibold text-white truncate">Select a station</div>
+          <div id="miniTrack" class="text-[9px] font-mono text-indigo-300/70 truncate hidden"></div>
         </div>
+        <button id="btnPlayMini" class="p-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-500/40 transition-all active:scale-90 shrink-0">
+          <svg id="iconPlayMini" class="w-4 h-4 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button id="btnNextMini" class="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-300 transition-all active:scale-90 shrink-0"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
       </div>
 
-      <div class="text-center mb-2 px-2">
-        <div class="text-[9px] text-indigo-400/70 uppercase tracking-[0.2em] font-mono mb-1">CHANNEL: <span id="mainChannel" class="text-white bg-white/5 px-2 py-0.5 rounded font-semibold">--</span></div>
-        <h2 id="mainStationName" class="text-lg font-semibold text-white mb-1 tracking-tight truncate px-4 min-h-[2rem]">Select a station</h2>
-        <p id="mainStatus" class="text-xs text-gray-500 flex items-center justify-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-gray-600" id="mainStatusDot"></span>
-          <span id="mainStatusText">Idle</span>
-        </p>
-      </div>
-
-      <div class="flex items-center justify-center gap-4 mb-2 flex-shrink-0">
-        <button id="btnPrev" class="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-90"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
-        <button id="btnPlay" class="p-4 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/40 transition-all active:scale-90"><svg id="iconPlay" class="w-6 h-6 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
-        <button id="btnNext" class="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-90"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
-      </div>
-
-      <div class="w-4/5 mx-auto mb-2 flex-shrink-0">
-        <div class="flex items-center gap-3 bg-white/5 py-2 px-3 rounded-xl border border-white/5">
-          <button id="btnVolDown" class="text-gray-500 hover:text-white transition-colors"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg></button>
-          <input id="mainVolume" type="range" min="0" max="100" value="45" class="flex-1">
-          <button id="btnVolUp" class="text-gray-500 hover:text-white transition-colors"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
+      <!-- ── FULL PLAYER CONTROLS ── -->
+      <div id="fullPlayer" class="flex-shrink-0">
+        <div class="flex items-center justify-center relative mb-2 mt-2">
+          <div class="absolute inset-0 flex items-center justify-center opacity-15 pointer-events-none">
+            <div class="w-32 h-32 rounded-full border border-indigo-500/30 animate-ping" style="animation-duration: 5s;"></div>
+          </div>
+          <div class="relative z-10 flex items-end justify-center gap-2 h-16 eq-container">
+            <div class="eq-bar eq-1 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[12%] shadow-lg"></div>
+            <div class="eq-bar eq-2 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[28%] shadow-lg"></div>
+            <div class="eq-bar eq-3 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[18%] shadow-lg"></div>
+            <div class="eq-bar eq-4 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[28%] shadow-lg"></div>
+            <div class="eq-bar eq-5 w-2 bg-gradient-to-t from-indigo-600 to-purple-400 rounded-full h-[12%] shadow-lg"></div>
+          </div>
         </div>
-        <div id="volDisplay" class="text-[9px] font-mono text-gray-500 text-center mt-1">Volume: 45%</div>
+
+        <div class="text-center mb-2 px-2">
+          <div class="text-[9px] text-indigo-400/70 uppercase tracking-[0.2em] font-mono mb-1">CHANNEL: <span id="mainChannel" class="text-white bg-white/5 px-2 py-0.5 rounded font-semibold">--</span></div>
+          <h2 id="mainStationName" class="text-lg font-semibold text-white mb-0.5 tracking-tight truncate px-4 min-h-[2rem]">Select a station</h2>
+          <p id="mainTrack" class="text-[9px] font-mono text-indigo-300/70 truncate px-6 mb-1 hidden"></p>
+          <p id="mainStatus" class="text-xs text-gray-500 flex items-center justify-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-gray-600" id="mainStatusDot"></span>
+            <span id="mainStatusText">Idle</span>
+          </p>
+        </div>
+
+        <div class="flex items-center justify-center gap-4 mb-2">
+          <button id="btnPrev" class="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-90"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+          <button id="btnPlay" class="p-4 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/40 transition-all active:scale-90"><svg id="iconPlay" class="w-6 h-6 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+          <button id="btnNext" class="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-all active:scale-90"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
+        </div>
+
+        <div class="w-4/5 mx-auto mb-2">
+          <div class="flex items-center gap-3 bg-white/5 py-2 px-3 rounded-xl border border-white/5">
+            <button id="btnVolDown" class="text-gray-500 hover:text-white transition-colors"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg></button>
+            <input id="mainVolume" type="range" min="0" max="100" value="45" class="flex-1">
+            <button id="btnVolUp" class="text-gray-500 hover:text-white transition-colors"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
+          </div>
+          <div id="volDisplay" class="text-[9px] font-mono text-gray-500 text-center mt-1">Volume: 45%</div>
+        </div>
       </div>
 
       <div id="remoteModeIndicator" class="hidden mx-auto w-4/5 mb-2 flex-shrink-0">
@@ -202,7 +226,7 @@
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto scrollbar-width-none pb-2" style="scrollbar-width:none;">
+      <div id="stationScrollArea" class="flex-1 overflow-y-auto scrollbar-width-none pb-2" style="scrollbar-width:none;">
         <!-- Search -->
         <div class="mb-3 relative">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -480,10 +504,24 @@ class HomePlayer {
 
   bindEvents() {
     document.getElementById('btnPlay').addEventListener('click', () => this.togglePlay());
+    document.getElementById('btnPlayMini').addEventListener('click', () => this.togglePlay());
     document.getElementById('btnPrev').addEventListener('click', () => this.navigate(-1));
     document.getElementById('btnNext').addEventListener('click', () => this.navigate(1));
+    document.getElementById('btnNextMini').addEventListener('click', () => this.navigate(1));
     document.getElementById('btnImport').addEventListener('click', () => document.getElementById('m3uInput').click());
     document.getElementById('m3uInput').addEventListener('change', e => this.handleImport(e));
+    document.getElementById('btnVolDown').addEventListener('click', () => this.adjustVolume(-10));
+    document.getElementById('btnVolUp').addEventListener('click', () => this.adjustVolume(10));
+
+    // ── Scroll to minimize player ──
+    const scrollArea = document.getElementById('stationScrollArea');
+    const fullPlayer = document.getElementById('fullPlayer');
+    const miniPlayer = document.getElementById('miniPlayer');
+    scrollArea.addEventListener('scroll', () => {
+      const minimized = scrollArea.scrollTop > 20;
+      fullPlayer.style.display = minimized ? 'none' : '';
+      miniPlayer.classList.toggle('hidden', !minimized);
+    });
     document.getElementById('btnVolDown').addEventListener('click', () => this.adjustVolume(-10));
     document.getElementById('btnVolUp').addEventListener('click', () => this.adjustVolume(10));
     document.getElementById('mainVolume').addEventListener('input', e => {
@@ -593,6 +631,15 @@ class HomePlayer {
       if (result && result.length > 1) song = result;
     } catch {}
 	this.updateMediaSession(s.name, song);
+    // Update current track display
+    if (song && song !== 'LIVE BROADCAST') {
+      const mainTrack = document.getElementById('mainTrack');
+      const miniTrack = document.getElementById('miniTrack');
+      mainTrack.textContent = '♪ ' + song;
+      miniTrack.textContent = '♪ ' + song;
+      mainTrack.classList.remove('hidden');
+      miniTrack.classList.remove('hidden');
+    }
     const rdsText = `NOW PLAYING: ${s.name.toUpperCase()} • TRACK: ${song.toUpperCase()} • AETHER PRO`;
     const el = document.getElementById('rdsTicker');
     el.textContent = (rdsText + ' • ').repeat(3);
@@ -610,13 +657,20 @@ class HomePlayer {
 
   render() {
     const st = this.state.currentStation || { name: 'Select a station' };
+    const pauseIcon = '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>';
+    const playIcon  = '<path d="M8 5v14l11-7z"/>';
     document.getElementById('mainStationName').textContent = st.name;
+    document.getElementById('miniStationName').textContent = st.name;
     document.getElementById('mainChannel').textContent = st.name.substring(0, 3).toUpperCase();
-    document.getElementById('iconPlay').innerHTML = this.state.playing
-      ? '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
-    document.querySelector('.eq-container').classList.toggle('eq-active', this.state.playing);
+    document.getElementById('iconPlay').innerHTML     = this.state.playing ? pauseIcon : playIcon;
+    document.getElementById('iconPlayMini').innerHTML = this.state.playing ? pauseIcon : playIcon;
+    document.querySelectorAll('.eq-container').forEach(c => c.classList.toggle('eq-active', this.state.playing));
     document.getElementById('btnPlay').classList.toggle('animate-pulse-glow', this.state.playing);
-    if (!this.state.playing) document.querySelectorAll('.eq-bar').forEach(b => b.style.height = '12%');
+    if (!this.state.playing) {
+      document.querySelectorAll('.eq-bar').forEach(b => b.style.height = '12%');
+      document.getElementById('mainTrack').classList.add('hidden');
+      document.getElementById('miniTrack').classList.add('hidden');
+    }
   }
 
   renderVolume() {
