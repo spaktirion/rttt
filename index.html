@@ -370,19 +370,6 @@ const CONFIG = {
   }
 };
 
-// FIX: Explicit ICE/STUN servers for WebRTC — required for GitHub Pages cross-device connections
-const PEER_CONFIG = {
-  config: {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
-    ]
-  }
-};
-
 (() => {
   const keep = new Set(Object.values(CONFIG.STORAGE_KEYS));
   for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -769,7 +756,7 @@ class HomePlayer {
 class ServerManager {
   constructor() {
     this.state = { serverName: localStorage.getItem(CONFIG.STORAGE_KEYS.SERVER_NAME) || '' };
-    this.peer = null; this.conn = null;
+    this.mqtt = null;
     this.init();
   }
 
@@ -787,25 +774,20 @@ class ServerManager {
     document.getElementById('serverNameDisplay').classList.remove('hidden');
     document.getElementById('activeServerName').textContent = name;
     document.getElementById('serverStatusLine').textContent = 'Starting…';
-    if (this.peer) { this.peer.destroy(); this.peer = null; }
-    this.peer = new Peer('AETHER-ULTRA-' + name, PEER_CONFIG);
-    this.peer.on('open', () => {
+    if (this.mqtt) { this.mqtt.end(); this.mqtt = null; }
+    const ctrlTopic = 'aether_pro_ctrl_' + name;
+    this.mqtt = mqtt.connect('wss://test.mosquitto.org:8081');
+    this.mqtt.on('connect', () => {
+      this.mqtt.subscribe(ctrlTopic);
       document.getElementById('serverStatusLine').textContent = 'Live • ' + name;
       toast('Server "' + name + '" is ready', 'success');
     });
-    this.peer.on('connection', c => {
-      this.conn = c;
-      c.on('open', () => { this.broadcastStatus(); toast('Remote connected', 'success'); });
-      c.on('data', d => this.execCommand(d));
-      c.on('close', () => { this.conn = null; toast('Remote disconnected', 'warning'); });
+    this.mqtt.on('message', (t, msg) => {
+      try { this.execCommand(JSON.parse(msg.toString())); } catch {}
     });
-    this.peer.on('error', err => {
-      if (err.type === 'unavailable-id') {
-        toast('Name "' + name + '" is taken — pick another', 'error');
-        localStorage.removeItem(CONFIG.STORAGE_KEYS.SERVER_NAME);
-        this.state.serverName = '';
-        this._showSetup();
-      }
+    this.mqtt.on('error', () => {
+      toast('Server connection error', 'error');
+      document.getElementById('serverStatusLine').textContent = 'Error';
     });
   }
 
@@ -818,7 +800,7 @@ class ServerManager {
   }
 
   stopServer() {
-    this.peer?.destroy(); this.peer = null; this.conn = null;
+    if (this.mqtt) { this.mqtt.end(); this.mqtt = null; }
     localStorage.removeItem(CONFIG.STORAGE_KEYS.SERVER_NAME);
     this.state.serverName = '';
     this._showSetup();
@@ -829,7 +811,7 @@ class ServerManager {
     document.getElementById('btnStartServer').addEventListener('click', () => this.startServer());
     document.getElementById('serverSetupInput').addEventListener('keydown', e => { if (e.key === 'Enter') this.startServer(); });
     document.getElementById('btnChangeServer').addEventListener('click', () => {
-      this.peer?.destroy(); this.peer = null; this.conn = null;
+      if (this.mqtt) { this.mqtt.end(); this.mqtt = null; }
       this._showSetup();
     });
     document.getElementById('btnStopServer').addEventListener('click', () => this.stopServer());
@@ -837,6 +819,7 @@ class ServerManager {
   }
 
   execCommand(cmd) {
+    if (cmd.type === 'HELLO') { toast('Remote connected', 'success'); this.broadcastStatus(); return; }
     const home = app?.home;
     if (!home) return;
     if (cmd.type === 'PLAY') {
@@ -864,23 +847,23 @@ class ServerManager {
 
   broadcastStatus() {
     const home = app?.home;
-    if (!home || !this.conn?.open) return;
-    this.conn.send({
+    if (!home || !this.mqtt?.connected || !this.state.serverName) return;
+    this.mqtt.publish('aether_pro_status_' + this.state.serverName, JSON.stringify({
       type: 'status',
       playing: home.state.playing,
       volume: Math.round(home.state.volume * 100),
       station: home.state.currentStation?.name || ''
-    });
+    }), { retain: true });
   }
 
-  destroy() { this.peer?.destroy(); }
+  destroy() { if (this.mqtt) { this.mqtt.end(); this.mqtt = null; } }
 }
 
 // ════════════════ REMOTE CONTROLLER ════════════════
 class RemoteController {
   constructor() {
     this.state = { connected: false, volume: 45, serverName: '' };
-    this.peer = null; this.conn = null;
+    this.mqtt = null;
     this.init();
   }
 
@@ -913,30 +896,31 @@ class RemoteController {
     localStorage.setItem(CONFIG.STORAGE_KEYS.HISTORY, JSON.stringify(hist.slice(0, 5)));
     this.loadHistory();
 
-    if (this.peer) { this.peer.destroy(); this.peer = null; this.conn = null; }
-    this.peer = new Peer(PEER_CONFIG);
-    this.peer.on('open', () => {
-      const c = this.peer.connect('AETHER-ULTRA-' + name, { reliable: true });
-      this.conn = c;
-      c.on('open', () => {
-        this.state.connected = true;
-        this.state.serverName = name;
-        document.getElementById('connectionPanel').classList.add('hidden');
-        document.getElementById('btnDisconnect').classList.remove('hidden');
-        document.getElementById('remoteStatusText').textContent = 'Connected to ' + name;
-        document.getElementById('remoteStatusDot').className = 'connection-dot online';
-        toast('Connected to ' + name, 'success');
-      });
-      c.on('data', d => this.handleData(d));
-      c.on('close', () => this._onDisconnect());
-      c.on('error', () => this._onDisconnect());
+    if (this.mqtt) { this.mqtt.end(); this.mqtt = null; }
+    const ctrlTopic = 'aether_pro_ctrl_' + name;
+    const statusTopic = 'aether_pro_status_' + name;
+    this.mqtt = mqtt.connect('wss://test.mosquitto.org:8081');
+    this.mqtt.on('connect', () => {
+      this.mqtt.subscribe(statusTopic);
+      this.mqtt.publish(ctrlTopic, JSON.stringify({ type: 'HELLO' }));
+      this.state.connected = true;
+      this.state.serverName = name;
+      document.getElementById('connectionPanel').classList.add('hidden');
+      document.getElementById('btnDisconnect').classList.remove('hidden');
+      document.getElementById('remoteStatusText').textContent = 'Connected to ' + name;
+      document.getElementById('remoteStatusDot').className = 'connection-dot online';
+      toast('Connected to ' + name, 'success');
     });
-    this.peer.on('error', () => toast('Could not reach "' + name + '"', 'error'));
+    this.mqtt.on('message', (t, msg) => {
+      try { this.handleData(JSON.parse(msg.toString())); } catch {}
+    });
+    this.mqtt.on('error', () => toast('Could not reach "' + name + '"', 'error'));
   }
 
   _onDisconnect() {
     this.state.connected = false;
-    this.conn = null;
+    this.state.serverName = '';
+    if (this.mqtt) { this.mqtt.end(); this.mqtt = null; }
     document.getElementById('connectionPanel').classList.remove('hidden');
     document.getElementById('btnDisconnect').classList.add('hidden');
     document.getElementById('remoteStatusText').textContent = 'Disconnected';
@@ -950,7 +934,10 @@ class RemoteController {
     app?.home?.updateFromRemote(d);
   }
 
-  send(d) { if (this.conn?.open) this.conn.send(d); }
+  send(d) {
+    if (!this.state.serverName || !this.mqtt?.connected) return;
+    this.mqtt.publish('aether_pro_ctrl_' + this.state.serverName, JSON.stringify(d));
+  }
 
   bindEvents() {
     // NEW: MQTT Discovery for GitHub/Local Network
@@ -1010,9 +997,9 @@ class RemoteController {
     // Standard manual events
     document.getElementById('btnManualConnect').addEventListener('click', () => this.connect());
     document.getElementById('remoteServerInput').addEventListener('keydown', e => { if (e.key === 'Enter') this.connect(); });
-    document.getElementById('btnDisconnect').addEventListener('click', () => { this.conn?.close(); this._onDisconnect(); });
+    document.getElementById('btnDisconnect').addEventListener('click', () => this._onDisconnect());
   }
-  destroy() { this.conn?.close(); this.peer?.destroy(); }
+  destroy() { if (this.mqtt) { this.mqtt.end(); this.mqtt = null; } }
 }
 
 // ════════════════ APP SHELL ════════════════
