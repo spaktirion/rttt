@@ -9,7 +9,6 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" onerror="console.warn('PeerJS CDN failed, using local fallback')"></script>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -71,12 +70,14 @@
   .station-row.active { background: rgba(99, 102, 241, 0.18); border-left-color: #6366f1; }
   .station-row:active { transform: scale(0.995); }
   
-  .star-btn { transition: transform 0.2s, color 0.2s, filter 0.2s; }
-  .star-btn:hover { transform: scale(1.25); }
-  .star-btn.filled { color: #facc15; filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.7)); }
-  .star-btn:active { transform: scale(1.1); }
+  .edit-btn { transition: transform 0.15s, color 0.15s; }
+  .edit-btn:hover { transform: scale(1.15); }
+  .edit-btn:active { transform: scale(0.95); }
 
-  .serbia-badge { background: linear-gradient(135deg, #c41e3a, #0051ba); padding: 3px 8px; border-radius: 5px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .modal-overlay.active { opacity: 1; pointer-events: all; }
+  .modal-box { background: #0f0f18; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 20px; width: 90%; max-width: 320px; transform: translateY(10px); transition: transform 0.2s; }
+  .modal-overlay.active .modal-box { transform: translateY(0); }
   
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1f2937; color: #fff; padding: 12px 24px; border-radius: 12px; font-size: 13px; font-weight: 500; z-index: 1000; box-shadow: 0 8px 30px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); animation: toastIn 0.3s ease forwards; }
   .toast.success { background: #064e3b; border-color: #10b981; }
@@ -103,7 +104,7 @@
 <body class="h-dvh flex sm:items-center sm:justify-center bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-[#030305] to-[#030305] overflow-hidden selection:bg-indigo-500/30">
 
 <div id="app" class="w-full sm:max-w-[400px] h-dvh sm:h-[94vh] sm:max-h-[820px] glass-strong sm:rounded-[32px] flex flex-col overflow-hidden relative shadow-2xl border-0 sm:border sm:border-white/10 sm:ring-1 ring-black/60">
-  <audio id="audioPlayer" crossorigin="anonymous" preload="metadata"></audio>
+  <audio id="audioPlayer" preload="metadata"></audio>
   <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 pointer-events-none"></div>
   <div class="absolute -top-32 -right-32 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -114,7 +115,7 @@
     </div>
     <div class="flex flex-col items-end gap-1">
       <div class="flex items-center gap-2">
-        <span class="text-[9px] font-mono text-indigo-400/80 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">v10.3</span>
+        <span class="text-[9px] font-mono text-indigo-400/80 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">v10.4</span>
         <button id="btnReset" class="text-[9px] font-mono text-gray-500 hover:text-red-400 transition-colors px-2 py-0.5" title="Clear all data & reload">🗑️ Reset</button>
       </div>
       <span id="sysStatus" class="text-[9px] font-mono text-emerald-400 flex items-center gap-1.5">
@@ -160,7 +161,7 @@
         </div>
         <div class="flex-1 min-w-0">
           <div id="miniStationName" class="text-[11px] font-semibold text-white truncate">Select a station</div>
-          <div id="miniTrack" class="text-[9px] font-mono text-indigo-300/70 truncate hidden"></div>
+          <div id="miniTrack" class="text-[10px] font-mono text-indigo-300/70 truncate hidden"></div>
         </div>
         <button id="btnPlayMini" class="p-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-500/40 transition-all active:scale-90 shrink-0">
           <svg id="iconPlayMini" class="w-4 h-4 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -184,9 +185,8 @@
         </div>
 
         <div class="text-center mb-2 px-2">
-          <div class="text-[9px] text-indigo-400/70 uppercase tracking-[0.2em] font-mono mb-1">CHANNEL: <span id="mainChannel" class="text-white bg-white/5 px-2 py-0.5 rounded font-semibold">--</span></div>
           <h2 id="mainStationName" class="text-lg font-semibold text-white mb-0.5 tracking-tight truncate px-4 min-h-[2rem]">Select a station</h2>
-          <p id="mainTrack" class="text-[9px] font-mono text-indigo-300/70 truncate px-6 mb-1 hidden"></p>
+          <p id="mainTrack" class="text-[10px] font-mono text-indigo-300/70 truncate px-6 mb-1 hidden">Live Broadcast</p>
           <p id="mainStatus" class="text-xs text-gray-500 flex items-center justify-center gap-1.5">
             <span class="w-1.5 h-1.5 rounded-full bg-gray-600" id="mainStatusDot"></span>
             <span id="mainStatusText">Idle</span>
@@ -245,14 +245,18 @@
           <div id="searchList" class="space-y-1"></div>
         </div>
 
-        <!-- Serbia Quick Dial -->
-        <div class="mb-3"><div class="flex items-center justify-between mb-1.5 px-1"><span class="text-[9px] font-bold uppercase tracking-widest text-red-400/80 flex items-center gap-1.5">🇷🇸 Serbia Quick Dial</span><span class="text-[8px] font-mono text-gray-600">DEFAULT</span></div><div id="serbiaList" class="space-y-1"></div></div>
-
-        <!-- Favorites -->
-        <div class="mb-3"><div class="flex items-center justify-between mb-1.5 px-1"><span class="text-[9px] font-bold uppercase tracking-widest text-yellow-400/80 flex items-center gap-1.5">⭐ Favorites</span><span id="favCount" class="text-[8px] font-mono text-gray-600">0 saved</span></div><div id="favList" class="space-y-1"></div><div id="favEmpty" class="text-center py-3 text-[9px] text-gray-600 italic">Tap ★ to favorite</div></div>
-
-        <!-- Imported -->
-        <div class="mb-3"><div class="flex items-center justify-between mb-1.5 px-1"><span class="text-[9px] font-bold uppercase tracking-widest text-emerald-400/80 flex items-center gap-1.5">📂 Imported</span><span id="importCount" class="text-[8px] font-mono text-gray-600">0 loaded</span></div><div id="importList" class="space-y-1"></div><div id="importEmpty" class="text-center py-3 text-[9px] text-gray-600 italic">Import .m3u to expand</div></div>
+        <!-- Saved Stations -->
+        <div class="mb-3">
+          <div class="flex items-center justify-between mb-1.5 px-1">
+            <span class="text-[9px] font-bold uppercase tracking-widest text-indigo-400/80 flex items-center gap-1.5">📻 Saved Stations</span>
+            <div class="flex items-center gap-2">
+              <span id="savedCount" class="text-[8px] font-mono text-gray-600">0 saved</span>
+              <button id="btnAddStation" class="w-5 h-5 rounded bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs flex items-center justify-center hover:bg-indigo-500/30 transition-all active:scale-90">+</button>
+            </div>
+          </div>
+          <div id="savedList" class="space-y-1"></div>
+          <div id="savedEmpty" class="text-center py-4 text-[9px] text-gray-600 italic">No saved stations yet.<br>Search, import .m3u, or tap + to add.</div>
+        </div>
       </div>
     </section>
 
@@ -356,6 +360,26 @@
   </main>
 </div>
 
+<!-- Station Edit Modal -->
+<div id="stationModal" class="modal-overlay" onclick="if(event.target===this)app.home.closeModal()">
+  <div class="modal-box space-y-3">
+    <div class="text-center">
+      <div id="modalTitle" class="text-sm font-semibold text-white">Add Station</div>
+      <div class="text-[8px] text-gray-500 mt-0.5">Enter station details</div>
+    </div>
+    <input id="modalName" type="text" placeholder="Station name" class="w-full bg-black/30 border border-white/10 text-white px-3 py-2.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500">
+    <input id="modalUrl" type="text" placeholder="Stream URL (http/https)" class="w-full bg-black/30 border border-white/10 text-white px-3 py-2.5 rounded-lg text-xs font-mono focus:outline-none focus:border-indigo-500">
+    <input id="modalRds" type="text" placeholder="Now Playing URL (optional — auto-detect if empty)" class="w-full bg-black/30 border border-white/10 text-white px-3 py-2.5 rounded-lg text-[10px] font-mono focus:outline-none focus:border-indigo-500 text-gray-400">
+    <div class="text-[8px] text-gray-600 text-center -mt-1">e.g. https://host:port/status-json.xsl or station website</div>
+    <div id="modalError" class="hidden text-[9px] text-red-400 text-center"></div>
+    <div class="flex gap-2">
+      <button id="modalCancel" class="flex-1 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-xs font-semibold transition-all active:scale-95" onclick="app.home.closeModal()">Cancel</button>
+      <button id="modalSave" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all active:scale-95">Save</button>
+      <button id="modalDelete" class="hidden py-2 px-3 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-xs font-bold transition-all active:scale-95">Delete</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ════════════════════════════════════════
 //  AETHER PRO v10.3 — Unified Logic
@@ -363,14 +387,33 @@
 
 const CONFIG = {
   STORAGE_KEYS: {
-    FAVORITES:   'aether_v103_favorites',
-    IMPORTED:    'aether_v103_imported',
+    SAVED:       'aether_v103_saved',
     SERVER_NAME: 'aether_server_name',
     HISTORY:     'aether_history'
   }
 };
 
+// Migrate old favorites + imported into saved
 (() => {
+  const oldFav = localStorage.getItem('aether_v103_favorites');
+  const oldImp = localStorage.getItem('aether_v103_imported');
+  let saved = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.SAVED) || '[]');
+  let merged = false;
+  if (oldImp) {
+    try {
+      const imp = JSON.parse(oldImp);
+      imp.forEach(s => { if (!saved.find(x => x.url === s.url)) { saved.push(s); merged = true; } });
+    } catch {}
+    localStorage.removeItem('aether_v103_imported');
+  }
+  if (oldFav) {
+    try {
+      const favUrls = JSON.parse(oldFav);
+      favUrls.forEach(url => { if (!saved.find(x => x.url === url)) { saved.push({ name: url.split('/').pop() || 'Station', url }); merged = true; } });
+    } catch {}
+    localStorage.removeItem('aether_v103_favorites');
+  }
+  if (merged) localStorage.setItem(CONFIG.STORAGE_KEYS.SAVED, JSON.stringify(saved));
   const keep = new Set(Object.values(CONFIG.STORAGE_KEYS));
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const k = localStorage.key(i);
@@ -390,35 +433,57 @@ const toast = (msg, type = 'info') => {
   setTimeout(() => { el.style.animation = 'toastOut 0.3s ease forwards'; setTimeout(() => el.remove(), 300); }, 2500);
 };
 
-// ── RDS: multi-proxy Icecast + SHOUTcast ──
+// ── RDS: parallel fetch from Icecast/SHOUTcast/ICY/RadioBrowser ──
 const PROXIES = [
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://cors.sh/?${encodeURIComponent(url)}`,
+  url => `https://proxy.cors.sh/${url}`,
 ];
-async function proxyFetch(url) {
-  for (const mk of PROXIES) {
+
+// Fetch with all proxies in parallel, return first success
+async function proxyFetchParallel(url, timeout = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+
+  const attempts = [
+    // Direct fetch first
+    fetch(url, { signal: controller.signal }).then(async r => r.ok ? await r.text() : null).catch(() => null),
+    // All proxies in parallel
+    ...PROXIES.map(mk =>
+      fetch(mk(url), { signal: controller.signal }).then(async r => {
+        if (!r.ok) return null;
+        const text = await r.text();
+        try { const j = JSON.parse(text); return j.contents ?? text; } catch { return text; }
+      }).catch(() => null)
+    ),
+  ];
+
+  const results = await Promise.all(attempts);
+  clearTimeout(timer);
+  return results.find(r => r && r.length > 0) || null;
+}
+
+async function fetchIcecast(u) {
+  const endpoints = ['/status-json.xsl', '/status.xsl', '/json.xsl'];
+  for (const ep of endpoints) {
+    const raw = await proxyFetchParallel(`${u.protocol}//${u.host}${ep}`, 6000);
+    if (!raw) continue;
     try {
-      const res = await fetch(mk(url), { signal: AbortSignal.timeout(4000) });
-      if (!res.ok) continue;
-      const text = await res.text();
-      try { const j = JSON.parse(text); return j.contents ?? text; } catch { return text; }
-    } catch { continue; }
+      const d = JSON.parse(raw);
+      if (!d.icestats?.source) continue;
+      const srcs = Array.isArray(d.icestats.source) ? d.icestats.source : [d.icestats.source];
+      const mount = srcs.find(m => m.listenurl?.includes(u.pathname)) || srcs[0];
+      const title = mount?.title || mount?.artist_title;
+      if (title) return title;
+    } catch {}
   }
   return null;
 }
-async function fetchIcecast(u) {
-  const raw = await proxyFetch(`${u.protocol}//${u.host}/status-json.xsl`);
-  if (!raw) return null;
-  try {
-    const d = JSON.parse(raw);
-    if (!d.icestats?.source) return null;
-    const srcs = Array.isArray(d.icestats.source) ? d.icestats.source : [d.icestats.source];
-    const mount = srcs.find(m => m.listenurl?.includes(u.pathname)) || srcs[0];
-    return mount?.title || null;
-  } catch { return null; }
-}
+
 async function fetchShoutcast(u) {
-  const raw = await proxyFetch(`${u.protocol}//${u.host}/7.html`);
+  const raw = await proxyFetchParallel(`${u.protocol}//${u.host}/7.html`, 6000);
   if (!raw) return null;
   try {
     const m = raw.match(/<body>(.*?)<\/body>/is);
@@ -428,17 +493,248 @@ async function fetchShoutcast(u) {
   } catch { return null; }
 }
 
-// ── Station data ──
-let SERBIAN_STATIONS = [];
-let SEARCH_RESULTS = [];
-
-async function fetchSerbianStations() {
+async function fetchICYHeaders(streamUrl) {
   try {
-    const res = await fetch('https://de1.api.radio-browser.info/json/stations/search?countrycode=RS&limit=20&order=clickcount&reverse=true&hidebroken=true');
-    SERBIAN_STATIONS = (await res.json()).map(s => ({ name: s.name, url: s.url_resolved || s.url })).filter(s => s.url);
-    app?.home?.renderStations();
+    const res = await fetch(streamUrl, { method: 'HEAD', mode: 'cors', signal: AbortSignal.timeout(3000) });
+    const icyName = res.headers.get('icy-name');
+    const icyDesc = res.headers.get('icy-description');
+    if (icyName && icyName.length > 1) return icyName;
+    if (icyDesc && icyDesc.length > 1) return icyDesc;
   } catch {}
+  return null;
 }
+
+async function fetchRadioBrowser(stationUrl) {
+  try {
+    // Look up the station in Radio Browser by URL to get a reliable now-playing
+    const encoded = encodeURIComponent(stationUrl);
+    const res = await fetch(`https://de1.api.radio-browser.info/json/url/${encoded}`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.length) return null;
+    const station = data[0];
+    // Store the UUID on the station for future direct queries
+    if (station.stationuuid) {
+      const saved = app?.home?.state?.saved;
+      if (saved) {
+        const match = saved.find(s => s.url === stationUrl);
+        if (match && !match.uuid) { match.uuid = station.stationuuid; app.home._saveSaved(); }
+      }
+    }
+    return station.title || station.name || null;
+  } catch {}
+  return null;
+}
+
+// Universal website scraper — extracts current, next, previous tracks from ANY station website
+function _text(html) {
+  return html.replace(/<br\s*\/?\>/gi, ' ').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#\d+;/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function _matchClass(html, className, tag = '[^>]*') {
+  const re = new RegExp(`<${tag}[^>]*class=["'][^"']*\\b${className}\\b[^"']*[^>]*>([\\s\\S]*?)<\\/${tag.split('[')[0]}`, 'i');
+  const m = html.match(re);
+  if (!m) return null;
+  return _text(m[1]);
+}
+
+function _matchAllClass(html, className, tag = 'div') {
+  const re = new RegExp(`<${tag}[^>]*class=["'][^"']*\\b${className}\\b[^"']*[^>]*>([\\s\\S]*?)<\\/${tag}`, 'gi');
+  const results = [];
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const t = _text(m[1]);
+    if (t.length > 0) results.push(t);
+  }
+  return results;
+}
+
+function _matchAfterLabel(html, labelPattern) {
+  // Find a label/heading, then grab the next text content block
+  const re = new RegExp(`${labelPattern}[\\s\\S]*?<(?:div|span|p|h[1-6]|strong|b|a)[^>]*>([\\s\\S]*?)<\/(?:div|span|p|h[1-6]|strong|b|a)>`, 'i');
+  const m = html.match(re);
+  if (!m) return null;
+  const t = _text(m[1]);
+  return t.length > 1 ? t : null;
+}
+
+function _matchLabelThenText(html, labelPattern) {
+  // Find label, then grab nearest meaningful text content (possibly nested)
+  const labelRe = new RegExp(`${labelPattern}`, 'i');
+  const labelIdx = html.search(labelRe);
+  if (labelIdx === -1) return null;
+  const after = html.substring(labelIdx);
+  // Try to find a div/span/p with substantial text within the next 500 chars
+  const contentRe = /<(?:div|span|p|h[1-6]|strong|b|td|li)[^>]*>([\s\S]{1,200}?)<\/(?:div|span|p|h[1-6]|strong|b|td|li)>/i;
+  const m = after.match(contentRe);
+  if (!m) return null;
+  const t = _text(m[1]);
+  return t.length > 1 ? t : null;
+}
+
+function _matchArtistSong(html) {
+  // Look for artist + song in paired elements (many radio sites use this pattern)
+  const patterns = [
+    // Paired classes: artist and song in same container
+    /(?:class=["'][^"']*(?:artist|five_artist|track-artist|song-artist|np-artist|now-artist)[^"']*[^>]*>[\s\S]*?<\/\w+>)[\s\S]*?(?:class=["'][^"']*(?:song|title|five_song|track-title|song-title|np-title|now-title|np-song)[^"']*[^>]*>[\s\S]*?<\/\w+>)/gi,
+    // Reversed order: song then artist
+    /(?:class=["'][^"']*(?:song|title|five_song|track-title|song-title|np-title|now-title)[^"']*[^>]*>[\s\S]*?<\/\w+>)[\s\S]*?(?:class=["'][^"']*(?:artist|five_artist|track-artist|song-artist|np-artist|now-artist)[^"']*[^>]*>[\s\S]*?<\/\w+>)/gi,
+  ];
+  for (const pat of patterns) {
+    const blocks = html.match(pat);
+    if (blocks) {
+      for (const block of blocks) {
+        // Extract text from both elements
+        const texts = [];
+        const tRe = /class=["'][^"']*(?:artist|five_artist|song|title|five_song|track-artist|track-title|song-title|song-artist|np-artist|np-title|np-song|now-artist|now-title)[^"']*[^>]*>([\s\S]*?)<\/\w+>/gi;
+        let tm;
+        while ((tm = tRe.exec(block)) !== null) {
+          const t = _text(tm[1]);
+          if (t.length > 0) texts.push(t);
+        }
+        if (texts.length >= 2) return `${texts[0]} - ${texts[1]}`;
+      }
+    }
+  }
+  return null;
+}
+
+async function fetchWebsitePlaylist(stationUrl) {
+  const saved = app?.home?.state?.saved;
+  if (!saved) return null;
+  const station = saved.find(s => s.url === stationUrl);
+  const website = station?.website || station?.rds;
+  if (!website) return null;
+
+  try {
+    const html = await proxyFetchParallel(website, 6000);
+    if (!html || html.length < 100) return null;
+
+    let current = null, next = null, previous = null;
+
+    // ── CURRENT TRACK (try many patterns) ──
+    // 1. Paired artist + song classes
+    current = _matchArtistSong(html);
+
+    // 2. Specific single-element classes (ordered by specificity)
+    if (!current) {
+      const currentClasses = [
+        'noapesma', 'nowonair', 'current-track', 'now-playing', 'now_playing',
+        'onair-track', 'on-air', 'currentsong', 'track-title', 'trackname',
+        'song-title', 'songtitle', 'playing-now', 'np-track', 'np-title',
+        'nowplaying', 'current_title', 'now_playing_title', 'player-track',
+        'on-air-title', 'airplay-current', 'radioplayer-title', 'stream-title',
+        'live-title', 'trackinfo', 'track-info', 'songinfo', 'song-info',
+      ];
+      for (const cls of currentClasses) {
+        const t = _matchClass(html, cls);
+        if (t && t.length > 1) { current = t; break; }
+      }
+    }
+
+    // 3. Label-based: find "NOW ON AIR" / "Now Playing" heading, grab next text
+    if (!current) {
+      const currentLabels = [
+        'NOW\\s+ON\\s+AIR', 'NOW\\s+PLAYING', 'NOW\\s*:\s*PLAYING',
+        'CURRENTLY\\s+PLAYING', 'ON\\s+AIR', 'TOCNO\\s+SADA',
+        'TOCNO\s+SADA', 'SADA\s+SVIRA', 'SLUSAJTE',
+        'TRENUTNO', 'TRENUTNA\s+PESMA',
+        'DERNIER', 'EN\s+DIRECTO', 'EN\s+VIVO',
+        'JETZT\s+IM', 'IM\s+MERK',
+      ];
+      for (const lbl of currentLabels) {
+        const t = _matchLabelThenText(html, lbl);
+        if (t && t.length > 2) { current = t; break; }
+      }
+    }
+
+    // ── NEXT SONG ──
+    const nextClasses = [
+      'nextsong', 'next-song', 'next_track', 'upcoming', 'nextup',
+      'next-title', 'next_title', 'coming-up', 'nextplay', 'np-next',
+    ];
+    for (const cls of nextClasses) {
+      const t = _matchClass(html, cls);
+      if (t && t.length > 1) { next = t; break; }
+    }
+    if (!next) {
+      const nextLabels = [
+        'NEXT\\s+SONG', 'COMING\\s+UP', 'NEXT\\s*:', 'UP\s+NEXT',
+        'SLEDECA\s+PESMA', 'SLEDECI', 'NACHSTES', 'PROCHAINS?',
+      ];
+      for (const lbl of nextLabels) {
+        const t = _matchLabelThenText(html, lbl);
+        if (t && t.length > 1) { next = t; break; }
+      }
+    }
+
+    // ── PREVIOUS / LAST PLAYED ──
+    // Try to get the first item from a "last songs" or "history" list
+    const prevContainerClasses = [
+      'last_five', 'last-5', 'last5', 'last-songs', 'last-played',
+      'recently-played', 'play-history', 'song-history', 'track-history',
+      'previous-tracks', 'played', 'history',
+    ];
+    for (const cls of prevContainerClasses) {
+      // Get the container content, then find the first song item in it
+      const containerRe = new RegExp(`<div[^>]*class=["'][^"']*\\b${cls}\\b[^"']*[^>]*>([\\s\\S]*?)<\/div>`, 'i');
+      const cMatch = html.match(containerRe);
+      if (cMatch) {
+        const container = cMatch[1];
+        // Try to extract artist + song from first item
+        const firstItem = _matchArtistSong(container);
+        if (firstItem) { previous = firstItem; break; }
+        // Or get text from first numbered item or sub-div
+        const itemRe = /<(?:div|span)[^>]*>([\s\S]{1,200}?)<\/(?:div|span)>/i;
+        const iMatch = container.match(itemRe);
+        if (iMatch) {
+          const t = _text(iMatch[1]);
+          if (t.length > 2 && t.length < 120) { previous = t; break; }
+        }
+      }
+    }
+    if (!previous) {
+      const prevLabels = [
+        'LAST\\s+\\d+\\s+SONGS?', 'PREVIOUSLY\\s+PLAYED', 'HISTORY',
+        'POSLEDNJIH\s+\\d', 'PRIJE', 'ZADNJIH\s+\\d',
+      ];
+      for (const lbl of prevLabels) {
+        const t = _matchLabelThenText(html, lbl);
+        if (t && t.length > 2 && t.length < 120) { previous = t; break; }
+      }
+    }
+
+    if (!current) return null;
+    return { current, next: next || null, previous: previous || null };
+  } catch {}
+  return null;
+}
+
+// Master RDS: run all sources in parallel, return { track, playlist }
+async function fetchTrackInfo(streamUrl) {
+  let u;
+  try { u = new URL(streamUrl); } catch { return { track: null, playlist: null }; }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7000);
+
+  const [icecast, shoutcast, playlist, radiobrowser, icy] = await Promise.all([
+    fetchIcecast(u).catch(() => null),
+    fetchShoutcast(u).catch(() => null),
+    fetchWebsitePlaylist(streamUrl).catch(() => null),
+    fetchRadioBrowser(streamUrl).catch(() => null),
+    fetchICYHeaders(streamUrl).catch(() => null),
+  ]);
+  clearTimeout(timer);
+
+  // Prefer Icecast/SHOUTcast (real-time) > website playlist > RadioBrowser > ICY
+  const websiteTrack = playlist?.current || null;
+  const track = icecast || shoutcast || websiteTrack || radiobrowser || icy || null;
+  return { track, playlist: playlist || null };
+}
+
+// ── Station data ──
+let SEARCH_RESULTS = [];
 
 async function searchStations(query) {
   if (!query || query.length < 2) return;
@@ -457,8 +753,7 @@ class HomePlayer {
     this.audio = document.getElementById('audioPlayer');
     this.state = {
       playing: false, currentStation: null, volume: 0.45,
-      favorites: JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.FAVORITES) || '[]'),
-      imported:  JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.IMPORTED)  || '[]'),
+      saved: JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.SAVED) || '[]'),
     };
     this.rdsInt = null;
     this.init();
@@ -491,7 +786,7 @@ class HomePlayer {
   
   
 
-  get allStations() { return [...SERBIAN_STATIONS, ...SEARCH_RESULTS, ...this.state.imported]; }
+  get allStations() { return [...SEARCH_RESULTS, ...this.state.saved]; }
 
   isRemoteActive() { return app?.remote?.state?.connected; }
 
@@ -510,6 +805,11 @@ class HomePlayer {
     document.getElementById('btnNextMini').addEventListener('click', () => this.navigate(1));
     document.getElementById('btnImport').addEventListener('click', () => document.getElementById('m3uInput').click());
     document.getElementById('m3uInput').addEventListener('change', e => this.handleImport(e));
+    document.getElementById('btnAddStation').addEventListener('click', () => this.openModal());
+    document.getElementById('modalSave').addEventListener('click', () => this.saveModal());
+    document.getElementById('modalDelete').addEventListener('click', () => this.deleteModal());
+    document.getElementById('modalName').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('modalUrl').focus(); });
+    document.getElementById('modalUrl').addEventListener('keydown', e => { if (e.key === 'Enter') this.saveModal(); });
     document.getElementById('btnVolDown').addEventListener('click', () => this.adjustVolume(-10));
     document.getElementById('btnVolUp').addEventListener('click', () => this.adjustVolume(10));
 
@@ -549,7 +849,7 @@ class HomePlayer {
   async togglePlay() {
     if (this.isRemoteActive()) { app.remote.send({ type: 'PLAY' }); return; }
     if (!this.state.currentStation) {
-      const s = SERBIAN_STATIONS[0] || this.state.imported[0];
+      const s = SEARCH_RESULTS[0] || this.state.saved[0];
       if (s) await this.playStation(s.url, s.name); return;
     }
     if (this.state.playing) { this.audio.pause(); this.updateStatus('Paused', 'idle'); }
@@ -617,33 +917,61 @@ class HomePlayer {
 
   _startRDS() {
     clearInterval(this.rdsInt);
+    this._rdsTrack = ''; // reset cache on station change
+    this._rdsPlaylist = null; // reset playlist cache
+    this._showTrack('♪ Live Broadcast'); // immediately clear old track name
+    // Reset ticker
+    const el = document.getElementById('rdsTicker');
+    el.textContent = 'CONNECTING TO STREAM • FETCHING TRACK INFO • AETHER PRO v10.4';
+    el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'ticker 16s linear infinite';
     this._fetchRDS();
-    this.rdsInt = setInterval(() => this._fetchRDS(), 15000);
+    this.rdsInt = setInterval(() => this._fetchRDS(), 10000);
+  }
+
+  _showTrack(text) {
+    const mainTrack = document.getElementById('mainTrack');
+    const miniTrack = document.getElementById('miniTrack');
+    mainTrack.textContent = text;
+    miniTrack.textContent = text;
+    mainTrack.classList.remove('hidden');
+    miniTrack.classList.remove('hidden');
+  }
+
+  _hideTrack() {
+    document.getElementById('mainTrack').classList.add('hidden');
+    document.getElementById('miniTrack').classList.add('hidden');
   }
 
   async _fetchRDS() {
     if (!this.state.currentStation || !this.state.playing) return;
     const s = this.state.currentStation;
-    let song = 'LIVE BROADCAST';
+    let song = '';
+    let playlist = null;
     try {
-      const u = new URL(s.url);
-      const result = await fetchIcecast(u) || await fetchShoutcast(u);
-      if (result && result.length > 1) song = result;
+      const { track, playlist: pl } = await fetchTrackInfo(s.url);
+      song = track || '';
+      playlist = pl;
+      if (song && song.length > 1 && song !== s.name) { /* valid */ }
+      else song = '';
     } catch {}
-        this.updateMediaSession(s.name, song);
-    // Update current track display
-    if (song && song !== 'LIVE BROADCAST') {
-      const mainTrack = document.getElementById('mainTrack');
-      const miniTrack = document.getElementById('miniTrack');
-      mainTrack.textContent = '♪ ' + song;
-      miniTrack.textContent = '♪ ' + song;
-      mainTrack.classList.remove('hidden');
-      miniTrack.classList.remove('hidden');
+    if (song) {
+      this._rdsTrack = song;
+      this._showTrack('♪ ' + song);
+    } else if (this._rdsTrack) {
+      this._showTrack('♪ ' + this._rdsTrack);
     }
-    const rdsText = `NOW PLAYING: ${s.name.toUpperCase()} • TRACK: ${song.toUpperCase()} • AETHER PRO`;
+    this.updateMediaSession(s.name, song || this._rdsTrack || 'Live Broadcast');
+
+    // ── Update flying ticker bar with current / next / previous ──
+    const trackDisplay = song || this._rdsTrack || 'Live Broadcast';
+    let rdsParts = [`♪ NOW: ${trackDisplay}`];
+    if (playlist?.next) rdsParts.push(`⏩ NEXT: ${playlist.next}`);
+    if (playlist?.previous) rdsParts.push(`⏪ PREV: ${playlist.previous}`);
+    rdsParts.push(`${s.name.toUpperCase()} • AETHER PRO`);
+    const rdsText = rdsParts.join(' • ');
     const el = document.getElementById('rdsTicker');
-    el.textContent = (rdsText + ' • ').repeat(3);
-    el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'ticker 16s linear infinite';
+    el.textContent = (rdsText + '     •     ').repeat(3);
+    el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'ticker 18s linear infinite';
   }
 
   updateStatus(t, type = 'idle') {
@@ -661,15 +989,18 @@ class HomePlayer {
     const playIcon  = '<path d="M8 5v14l11-7z"/>';
     document.getElementById('mainStationName').textContent = st.name;
     document.getElementById('miniStationName').textContent = st.name;
-    document.getElementById('mainChannel').textContent = st.name.substring(0, 3).toUpperCase();
     document.getElementById('iconPlay').innerHTML     = this.state.playing ? pauseIcon : playIcon;
     document.getElementById('iconPlayMini').innerHTML = this.state.playing ? pauseIcon : playIcon;
     document.querySelectorAll('.eq-container').forEach(c => c.classList.toggle('eq-active', this.state.playing));
     document.getElementById('btnPlay').classList.toggle('animate-pulse-glow', this.state.playing);
-    if (!this.state.playing) {
+    if (this.state.playing) {
+      // Show "Live Broadcast" track line if RDS hasn't found a track yet
+      if (document.getElementById('mainTrack').classList.contains('hidden')) {
+        this._showTrack('♪ Live Broadcast');
+      }
+    } else {
       document.querySelectorAll('.eq-bar').forEach(b => b.style.height = '12%');
-      document.getElementById('mainTrack').classList.add('hidden');
-      document.getElementById('miniTrack').classList.add('hidden');
+      this._hideTrack();
     }
   }
 
@@ -685,17 +1016,17 @@ class HomePlayer {
     wrap.classList.remove('hidden');
     list.innerHTML = SEARCH_RESULTS.map(s => {
       const active = this.state.currentStation?.url === s.url;
-      const fav = this.state.favorites.includes(s.url);
+      const isSaved = this.state.saved.some(st => st.url === s.url);
       const safeName = s.name.replace(/'/g, "\\'");
+      const safeUrl = s.url.replace(/'/g, "\\'");
       return `<div class="station-row flex items-center justify-between p-2 rounded-lg ${active ? 'active' : 'bg-white/5'}">
-        <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" onclick="window.play('${s.url}','${safeName}')">
+        <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" onclick="window.play('${safeUrl}','${safeName}')">
           <div class="w-7 h-7 rounded bg-white/5 flex items-center justify-center text-[10px] shrink-0">📻</div>
           <div class="truncate"><div class="text-[11px] font-medium text-gray-200 truncate">${s.name}</div>${s.country ? `<div class="text-[8px] text-gray-500">${s.country}</div>` : ''}</div>
         </div>
         <div class="flex items-center gap-1.5 shrink-0 ml-1">
-          <span class="text-[8px] px-1 bg-white/5 rounded text-gray-500">SRCH</span>
-          <button class="star-btn p-1 rounded hover:bg-white/10 ${fav?'filled text-yellow-400':'text-gray-600'}" onclick="event.stopPropagation(); window.fav('${s.url}')">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="${fav?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+          <button class="edit-btn p-1 rounded hover:bg-white/10 ${isSaved?'text-yellow-400':'text-gray-600'}" onclick="event.stopPropagation(); window.toggleSave('${safeUrl}','${safeName}')" title="${isSaved?'Remove from saved':'Save station'}">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="${isSaved?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
           </button>
         </div>
       </div>`;
@@ -703,32 +1034,141 @@ class HomePlayer {
   }
 
   renderStations() {
-    document.getElementById('serbiaList').innerHTML = SERBIAN_STATIONS.map(s => this.rowHTML(s, 'serbia')).join('') || '<p class="text-[9px] text-gray-600 italic p-2">Loading…</p>';
-    const favs = [...SERBIAN_STATIONS, ...SEARCH_RESULTS, ...this.state.imported].filter(s => this.state.favorites.includes(s.url));
-    document.getElementById('favCount').textContent = `${favs.length} saved`;
-    document.getElementById('favEmpty').style.display = favs.length ? 'none' : 'block';
-    document.getElementById('favList').innerHTML = favs.map(s => this.rowHTML(s, 'fav')).join('');
-    document.getElementById('importCount').textContent = `${this.state.imported.length} loaded`;
-    document.getElementById('importEmpty').style.display = this.state.imported.length ? 'none' : 'block';
-    document.getElementById('importList').innerHTML = this.state.imported.map(s => this.rowHTML(s, 'imp')).join('');
+    const saved = this.state.saved;
+    document.getElementById('savedCount').textContent = `${saved.length} saved`;
+    document.getElementById('savedEmpty').style.display = saved.length ? 'none' : 'block';
+    document.getElementById('savedList').innerHTML = saved.map((s, i) => {
+      const active = this.state.currentStation?.url === s.url;
+      const safeName = s.name.replace(/'/g, "\\'");
+      const safeUrl = s.url.replace(/'/g, "\\'");
+      return `<div class="station-row flex items-center justify-between p-2 rounded-lg ${active ? 'active' : 'bg-white/5'}">
+        <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" onclick="window.play('${safeUrl}','${safeName}')">
+          <div class="flex flex-col items-center gap-0 shrink-0 mr-0.5">
+            <button class="edit-btn p-0 rounded hover:bg-white/10 ${i===0?'text-gray-700 pointer-events-none':'text-gray-500 hover:text-white'}" onclick="event.stopPropagation(); app.home.moveStation(${i},-1)" title="Move up">
+              <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
+            <button class="edit-btn p-0 rounded hover:bg-white/10 ${i===saved.length-1?'text-gray-700 pointer-events-none':'text-gray-500 hover:text-white'}" onclick="event.stopPropagation(); app.home.moveStation(${i},1)" title="Move down">
+              <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          </div>
+          <div class="w-6 h-6 rounded bg-indigo-500/10 flex items-center justify-center text-[10px] shrink-0">📻</div>
+          <div class="truncate"><div class="text-[11px] font-medium text-gray-200 truncate">${s.name}</div></div>
+        </div>
+        <div class="flex items-center gap-1 shrink-0 ml-1">
+          <button class="edit-btn p-1 rounded hover:bg-white/10 text-gray-500 hover:text-indigo-300" onclick="event.stopPropagation(); app.home.openModal(${i})" title="Edit">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="edit-btn p-1 rounded hover:bg-red-500/20 text-gray-500 hover:text-red-400" onclick="event.stopPropagation(); app.home.deleteStation(${i})" title="Delete">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      </div>`;
+    }).join('');
   }
 
-  rowHTML(st, type) {
-    const active = this.state.currentStation?.url === st.url;
-    const fav = this.state.favorites.includes(st.url);
-    const safeName = st.name.replace(/'/g, "\\'");
-    return `<div class="station-row flex items-center justify-between p-2 rounded-lg ${active ? 'active' : 'bg-white/5'}">
-      <div class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" onclick="window.play('${st.url}','${safeName}')">
-        <div class="w-7 h-7 rounded bg-white/5 flex items-center justify-center text-[10px] shrink-0">${type==='serbia'?'🇷🇸':fav?'⭐':'📻'}</div>
-        <div class="truncate"><div class="text-[11px] font-medium text-gray-200 truncate">${st.name}</div></div>
-      </div>
-      <div class="flex items-center gap-1.5 shrink-0 ml-1">
-        ${type!=='serbia'?`<span class="text-[8px] px-1 bg-white/5 rounded text-gray-500">${type}</span>`:'<span class="serbia-badge">DEF</span>'}
-        <button class="star-btn p-1 rounded hover:bg-white/10 ${fav?'filled text-yellow-400':'text-gray-600'}" onclick="event.stopPropagation(); window.fav('${st.url}')">
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="${fav?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-        </button>
-      </div>
-    </div>`;
+  moveStation(index, dir) {
+    const saved = this.state.saved;
+    const target = index + dir;
+    if (target < 0 || target >= saved.length) return;
+    [saved[index], saved[target]] = [saved[target], saved[index]];
+    this._saveSaved();
+    this.renderStations();
+  }
+
+  _saveSaved() {
+    localStorage.setItem(CONFIG.STORAGE_KEYS.SAVED, JSON.stringify(this.state.saved));
+  }
+
+  openModal(index = -1) {
+    const modal = document.getElementById('stationModal');
+    const title = document.getElementById('modalTitle');
+    const nameIn = document.getElementById('modalName');
+    const urlIn = document.getElementById('modalUrl');
+    const rdsIn = document.getElementById('modalRds');
+    const delBtn = document.getElementById('modalDelete');
+    const errEl = document.getElementById('modalError');
+    errEl.classList.add('hidden');
+
+    if (index >= 0 && this.state.saved[index]) {
+      // Editing existing
+      title.textContent = 'Edit Station';
+      nameIn.value = this.state.saved[index].name;
+      urlIn.value = this.state.saved[index].url;
+      rdsIn.value = this.state.saved[index].rds || '';
+      delBtn.classList.remove('hidden');
+      modal._editIndex = index;
+    } else {
+      // Adding new
+      title.textContent = 'Add Station';
+      nameIn.value = '';
+      urlIn.value = '';
+      rdsIn.value = '';
+      delBtn.classList.add('hidden');
+      modal._editIndex = -1;
+    }
+    modal.classList.add('active');
+    setTimeout(() => nameIn.focus(), 100);
+  }
+
+  closeModal() {
+    document.getElementById('stationModal').classList.remove('active');
+  }
+
+  saveModal() {
+    const modal = document.getElementById('stationModal');
+    const errEl = document.getElementById('modalError');
+    const name = document.getElementById('modalName').value.trim();
+    const url = document.getElementById('modalUrl').value.trim();
+    const idx = modal._editIndex;
+
+    if (!name) { errEl.textContent = 'Enter a station name'; errEl.classList.remove('hidden'); return; }
+    if (!url || !/^https?:\/\//i.test(url)) { errEl.textContent = 'Enter a valid stream URL (http/https)'; errEl.classList.remove('hidden'); return; }
+
+    // Check duplicate (unless editing same entry)
+    if (this.state.saved.some((s, i) => s.url === url && i !== idx)) {
+      errEl.textContent = 'A station with this URL already exists'; errEl.classList.remove('hidden'); return;
+    }
+
+    const rds = document.getElementById('modalRds').value.trim();
+    const station = rds ? { name, url, rds } : { name, url };
+
+    if (idx >= 0) {
+      this.state.saved[idx] = station;
+      toast('Station updated', 'success');
+    } else {
+      this.state.saved.push(station);
+      toast('Station added', 'success');
+    }
+    this._saveSaved();
+    this.renderStations();
+    this.renderSearch();
+    this.closeModal();
+  }
+
+  deleteModal() {
+    const modal = document.getElementById('stationModal');
+    const idx = modal._editIndex;
+    if (idx >= 0 && this.state.saved[idx]) {
+      const name = this.state.saved[idx].name;
+      this.state.saved.splice(idx, 1);
+      this._saveSaved();
+      this.renderStations();
+      this.renderSearch();
+      this.closeModal();
+      toast(`Deleted "${name}"`, 'warning');
+    }
+  }
+
+  deleteStation(index) {
+    if (index < 0 || !this.state.saved[index]) return;
+    const name = this.state.saved[index].name;
+    if (confirm(`Delete "${name}"?`)) {
+      this.state.saved.splice(index, 1);
+      this._saveSaved();
+      this.renderStations();
+      this.renderSearch();
+      toast(`Deleted "${name}"`, 'warning');
+    }
   }
 
   handleImport(e) {
@@ -741,9 +1181,9 @@ class HomePlayer {
         if (l.startsWith('#EXTINF:')) { const m = l.match(/,(.+)/); if (m) name = m[1].trim(); }
         else if (/^https?:\/\//.test(l.trim())) { imp.push({ name, url: l.trim() }); name = 'Station'; }
       });
-      const unique = imp.filter(s => !this.state.imported.find(i => i.url === s.url));
-      this.state.imported.push(...unique);
-      localStorage.setItem(CONFIG.STORAGE_KEYS.IMPORTED, JSON.stringify(this.state.imported));
+      const unique = imp.filter(s => !this.state.saved.find(x => x.url === s.url));
+      this.state.saved.push(...unique);
+      this._saveSaved();
       this.renderStations(); toast(`Imported ${unique.length} stations`, 'success');
     };
     reader.readAsText(file); e.target.value = '';
@@ -840,7 +1280,7 @@ class ServerManager {
     if (!home) return;
     if (cmd.type === 'PLAY') {
       if (!home.state.currentStation) {
-        const s = SERBIAN_STATIONS[0] || home.state.imported[0];
+        const s = SEARCH_RESULTS[0] || home.state.saved[0];
         if (s) home.playStation(s.url, s.name);
       } else {
         home.togglePlay();
@@ -1068,17 +1508,24 @@ class AetherApp {
 
 let app;
 window.play = (url, name) => app.home.playStation(url, name);
-window.fav = url => {
-  const idx = app.home.state.favorites.indexOf(url);
-  idx === -1 ? app.home.state.favorites.push(url) : app.home.state.favorites.splice(idx, 1);
-  localStorage.setItem(CONFIG.STORAGE_KEYS.FAVORITES, JSON.stringify(app.home.state.favorites));
-  app.home.renderStations(); app.home.renderSearch();
+window.toggleSave = (url, name) => {
+  const saved = app.home.state.saved;
+  const idx = saved.findIndex(s => s.url === url);
+  if (idx === -1) {
+    saved.push({ name, url });
+    toast('Station saved', 'success');
+  } else {
+    saved.splice(idx, 1);
+    toast('Removed from saved', 'warning');
+  }
+  app.home._saveSaved();
+  app.home.renderStations();
+  app.home.renderSearch();
 };
 
 // ════════════════ FINAL BOOTSTRAP & BACKGROUND FIX ════════════════
 document.addEventListener('DOMContentLoaded', () => {
   app = new AetherApp();
-  fetchSerbianStations();
 
   // 1. BACKGROUND PLAY FIX: Setup Media Session for Android Lock Screen
   if ('mediaSession' in navigator) {
